@@ -362,7 +362,8 @@ class Canvas(QtWidgets.QWidget):
                 self.prevhEdge = self.hEdge
                 self.hEdge = None
                 self.setToolTip(
-                    self.tr("Click & drag to move shape '%s'") % shape.description
+                    self.tr("Click & drag to move '%s' '%s'")
+                    % (shape.label, shape.description)
                 )
                 self.setStatusTip(self.toolTip())
                 self.overrideCursor(CURSOR_GRAB)
