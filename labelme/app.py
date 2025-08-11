@@ -1288,11 +1288,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actions.copy.setEnabled(n_selected)  # type: ignore[attr-defined]
         self.actions.edit.setEnabled(n_selected)  # type: ignore[attr-defined]
 
-    def addLabel(self, shape):
-        if shape.group_id is None:
-            text = shape.label
-        else:
-            text = "{} ({})".format(shape.label, shape.group_id)
+    def addLabel(self, shape, index=None):
+        # if shape.group_id is None:
+        #     text = shape.label
+        # else:
+        index = len(self.labelList)
+        text = "{}: {} ({}) ({})".format(index, shape.label, shape.group_id, shape.description)
+        
         label_list_item = LabelListWidgetItem(text, shape)
         self.labelList.addItem(label_list_item)
         if self.uniqLabelList.findItemByLabel(shape.label) is None:
@@ -1348,8 +1350,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def loadShapes(self, shapes, replace=True):
         self._noSelectionSlot = True
-        for shape in shapes:
-            self.addLabel(shape)
+        for i, shape in enumerate(shapes):
+            self.addLabel(shape, i)
         self.labelList.clearSelection()
         self._noSelectionSlot = False
         self.canvas.loadShapes(shapes, replace=replace)
@@ -1523,7 +1525,7 @@ class MainWindow(QtWidgets.QMainWindow):
             shape = self.canvas.setLastLabel(text, flags)
             shape.group_id = group_id
             shape.description = description
-            self.addLabel(shape)
+            self.addLabel(shape, index=None)
             self.actions.editMode.setEnabled(True)  # type: ignore[attr-defined]
             self.actions.undoLastPoint.setEnabled(False)  # type: ignore[attr-defined]
             self.actions.undo.setEnabled(True)  # type: ignore[attr-defined]
@@ -2106,7 +2108,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def copyShape(self):
         self.canvas.endMove(copy=True)
         for shape in self.canvas.selectedShapes:
-            self.addLabel(shape)
+            self.addLabel(shape, index=None)
         self.labelList.clearSelection()
         self.setDirty()
 
