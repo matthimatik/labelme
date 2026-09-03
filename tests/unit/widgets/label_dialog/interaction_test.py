@@ -126,6 +126,52 @@ def test_other_keys_edit_text_not_list(*, qtbot: QtBot) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Ctrl+Enter accepts the dialog
+# ---------------------------------------------------------------------------
+
+
+def test_ctrl_enter_in_edit_accepts(*, qtbot: QtBot) -> None:
+    dialog = _show_dialog_with_labels(qtbot, labels=["cat"])
+    dialog.edit.setText("cat")
+    qtbot.keyClick(
+        dialog.edit,
+        QtCore.Qt.Key.Key_Return,
+        modifier=QtCore.Qt.KeyboardModifier.ControlModifier,
+    )
+    assert dialog.result() == QtWidgets.QDialog.DialogCode.Accepted
+
+
+def test_ctrl_enter_in_group_id_accepts(*, qtbot: QtBot) -> None:
+    dialog = _show_dialog_with_labels(qtbot, labels=["cat"])
+    dialog.edit.setText("cat")
+    qtbot.keyClick(
+        dialog.edit_group_id,
+        QtCore.Qt.Key.Key_Return,
+        modifier=QtCore.Qt.KeyboardModifier.ControlModifier,
+    )
+    assert dialog.result() == QtWidgets.QDialog.DialogCode.Accepted
+
+
+def test_ctrl_enter_in_description_accepts(*, qtbot: QtBot) -> None:
+    dialog = _show_dialog_with_labels(qtbot, labels=["cat"])
+    dialog.edit.setText("cat")
+    qtbot.keyClick(
+        dialog.edit_description,
+        QtCore.Qt.Key.Key_Enter,
+        modifier=QtCore.Qt.KeyboardModifier.ControlModifier,
+    )
+    assert dialog.result() == QtWidgets.QDialog.DialogCode.Accepted
+
+
+def test_plain_enter_in_description_inserts_newline(*, qtbot: QtBot) -> None:
+    dialog = _show_dialog_with_labels(qtbot, labels=["cat"])
+    dialog.edit.setText("cat")
+    qtbot.keyClick(dialog.edit_description, QtCore.Qt.Key.Key_Return)
+    assert dialog.result() != QtWidgets.QDialog.DialogCode.Accepted
+    assert dialog.edit_description.toPlainText() == "\n"
+
+
+# ---------------------------------------------------------------------------
 # Construction
 # ---------------------------------------------------------------------------
 

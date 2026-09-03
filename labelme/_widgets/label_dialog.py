@@ -116,6 +116,9 @@ class LabelDialog(QtWidgets.QDialog):
         # Up/Down are taken before the line edit sees them so the arrow keys walk
         # the label list while every other key keeps editing the text.
         self.edit.installEventFilter(self)
+        # Ctrl+Enter anywhere in the dialog saves and closes.
+        self.edit_group_id.installEventFilter(self)
+        self.edit_description.installEventFilter(self)
 
         button_box = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.StandardButton.Ok
@@ -211,16 +214,29 @@ class LabelDialog(QtWidgets.QDialog):
         )
 
     def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent, /) -> bool:
-        if watched is self.edit and event.type() == QtCore.QEvent.Type.KeyPress:
+        if event.type() == QtCore.QEvent.Type.KeyPress:
             assert isinstance(event, QtGui.QKeyEvent)
-            step = {QtCore.Qt.Key.Key_Up: -1, QtCore.Qt.Key.Key_Down: 1}.get(
-                QtCore.Qt.Key(event.key())
-            )
-            if step is not None:
-                row = self.label_list.currentRow() + step
-                self.label_list.setCurrentRow(
-                    min(max(row, 0), self.label_list.count() - 1)
+            if watched is self.edit:
+                step = {QtCore.Qt.Key.Key_Up: -1, QtCore.Qt.Key.Key_Down: 1}.get(
+                    QtCore.Qt.Key(event.key())
                 )
+                if step is not None:
+                    row = self.label_list.currentRow() + step
+                    self.label_list.setCurrentRow(
+                        min(max(row, 0), self.label_list.count() - 1)
+                    )
+                    return True
+                if (
+                    event.key() in (QtCore.Qt.Key.Key_Return, QtCore.Qt.Key.Key_Enter)
+                    and event.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier
+                ):
+                    self.accept()
+                    return True
+            elif watched in (self.edit_group_id, self.edit_description) and (
+                event.key() in (QtCore.Qt.Key.Key_Return, QtCore.Qt.Key.Key_Enter)
+                and event.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier
+            ):
+                self.accept()
                 return True
         return super().eventFilter(watched, event)
 
