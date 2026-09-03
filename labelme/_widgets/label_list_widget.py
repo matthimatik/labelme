@@ -16,14 +16,18 @@ from .._shape import Shape
 LABEL_COLOR_ROLE: Final = Qt.ItemDataRole.UserRole.value + 1
 
 
-def format_shape_label(*, shape: Shape) -> str:
+def format_shape_label(*, shape: Shape, index: int | None = None) -> str:
     assert shape.label is not None
     text = shape.label
     if shape.group_id is not None:
         text += f" ({shape.group_id})"
+    if shape.description:
+        text += f" ({shape.description})"
     enabled_flags = [key for key, value in (shape.flags or {}).items() if value]
     if enabled_flags:
         text += f" [{', '.join(enabled_flags)}]"
+    if index is not None:
+        text = f"{index}: {text}"
     return text
 
 

@@ -989,9 +989,12 @@ class Canvas(QtWidgets.QWidget):
                 hovered_vertex=None,
                 hovered_rotation=None,
             )
+            shape_info = target.shape.label or ""
+            if target.shape.description:
+                shape_info += f" — {target.shape.description}"
             status_messages.extend(
                 [
-                    self.tr("Click & drag to move shape"),
+                    self.tr("Click & drag to move shape '%s'") % shape_info,
                     self.tr("Right-click & drag to copy shape"),
                 ]
             )

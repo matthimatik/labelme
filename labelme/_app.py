@@ -1693,6 +1693,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def add_label(self, *, shape: Shape) -> None:
         assert shape.label is not None
         label_list_item = LabelListWidgetItem(shape=shape)
+        index = len(self._docks.label_list)
         self._docks.label_list.add_item(item=label_list_item)
         if self._docks.unique_label_list.find_label_item(label=shape.label) is None:
             self._docks.unique_label_list.add_label_item(
@@ -1711,7 +1712,7 @@ class MainWindow(QtWidgets.QMainWindow):
             unique_label_list=self._docks.unique_label_list,
         )
         label_list_item.set_label(
-            text=format_shape_label(shape=shape),
+            text=format_shape_label(shape=shape, index=index),
             color=fill_rgb,
         )
 
