@@ -11,6 +11,7 @@ import subprocess
 import time
 import typing
 import webbrowser
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
 from typing import Literal
@@ -58,6 +59,7 @@ from ._widgets import LabelDialogField
 from ._widgets import LabelListWidget
 from ._widgets import LabelListWidgetItem
 from ._widgets import Palette
+from ._widgets import QuickOpenDialog
 from ._widgets import SettingsDialog
 from ._widgets import StatusStats
 from ._widgets import ToolBar
@@ -125,6 +127,7 @@ class _Actions(NamedTuple):
     change_output_dir: QtGui.QAction
     open: QtGui.QAction
     close: QtGui.QAction
+    jump_to_file_and_shape: QtGui.QAction
     delete_file: QtGui.QAction
     toggle_keep_prev_mode: QtGui.QAction
     toggle_keep_prev_brightness_contrast: QtGui.QAction
@@ -197,6 +200,7 @@ class MainWindow(QtWidgets.QMainWindow):
     _persistent_actions: dict[tuple[str, ...], QtGui.QAction]
     _menus: _Menus
     _label_dialog: LabelDialog
+    _quick_open_dialog: QuickOpenDialog
     _settings_dialog: SettingsDialog | None = None
     _shape_color_preview: dict | None
     _ai_annotation: AiAssistedAnnotationWidget
@@ -235,6 +239,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._shape_clipboard = ShapeClipboard(parent=self)
 
         self._label_dialog = self._make_label_dialog(label_history=None)
+        self._quick_open_dialog = QuickOpenDialog(parent=self)
 
         self._prev_opened_dir = None
         self._label_list_menu_origin: QtCore.QPoint | None = None
@@ -404,6 +409,13 @@ class MainWindow(QtWidgets.QMainWindow):
             shortcut=shortcuts["open_dir"],
             icon="phosphor/folder-open.svg",
             tip=self.tr("Open Dir"),
+        )
+        jump_to_file_and_shape = action(
+            text=self.tr("Jump to File and Shape"),
+            slot=self._jump_to_file_and_shape,
+            shortcut=shortcuts["jump_to_file_and_shape"],
+            icon="phosphor/magnifying-glass-plus.svg",
+            tip=self.tr("Jump to a file and select a shape (file_name#shape_index)"),
         )
         close = action(
             text=self.tr("&Close"),
@@ -798,6 +810,7 @@ class MainWindow(QtWidgets.QMainWindow):
             change_output_dir=change_output_dir,
             open=open_,
             close=close,
+            jump_to_file_and_shape=jump_to_file_and_shape,
             delete_file=delete_file,
             toggle_keep_prev_mode=keep_prev_action,
             toggle_keep_prev_brightness_contrast=toggle_keep_prev_brightness_contrast,
@@ -896,6 +909,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._actions.open_next_img,
                 self._actions.open_prev_img,
                 self._actions.open_dir,
+                self._actions.jump_to_file_and_shape,
                 self._actions.save,
                 self._actions.save_as,
                 self._actions.save_auto,
@@ -2418,6 +2432,41 @@ class MainWindow(QtWidgets.QMainWindow):
         if image_or_label_path:
             self._load_from_file_or_dir(file_or_dir=image_or_label_path)
 
+    def _jump_to_file_and_shape(self) -> None:
+        query = self._quick_open_dialog.popup()
+        if query is None:
+            return
+        image_paths = self.image_list
+        if not image_paths and self._image_path is not None:
+            image_paths = [self._image_path]
+        target = _resolve_jump_target(query=query, image_paths=image_paths)
+        if target is None:
+            self.show_status_message(
+                self.tr("No image matches %s") % query,
+            )
+            return
+        image_path, shape_index = target
+
+        if image_path != self._image_path and not self._can_continue():
+            return
+        if image_path in self.image_list:
+            self._docks.file_list.setCurrentRow(self.image_list.index(image_path))
+        elif image_path != self._image_path:
+            if not self._load_file(image_or_label_path=image_path):
+                return
+        # A cancelled "save changes?" prompt leaves the current image in place.
+        if self._image_path != image_path:
+            return
+
+        shapes = self._canvas_widgets.canvas.shapes
+        if 0 <= shape_index < len(shapes):
+            self._canvas_widgets.canvas.select_shapes(shapes=[shapes[shape_index]])
+        else:
+            self.show_status_message(
+                self.tr("No shape #%d in %s")
+                % (shape_index, Path(image_path).name),
+            )
+
     def prompt_output_dir(self, _value: bool = False, /) -> None:  # noqa: FBT001, FBT002 -- QAction.triggered slot
         default_output_dir: str
         if self._output_dir is not None:
@@ -3075,6 +3124,53 @@ class MainWindow(QtWidgets.QMainWindow):
                 f"y={self._status_mouse_pos.y():6.1f}"
             )
         self._status_bar.stats.setText(" | ".join(stats))
+
+
+def _parse_jump_query(*, query: str) -> tuple[str, int] | None:
+    """Split "<file_name>#<shape_index>" into its parts.
+
+    The separator is the last '#', and the shape index must be digits, so
+    "a#b#2" yields ("a#b", 2) while "img#x" and "img" yield None.
+    """
+    separator = query.rfind("#")
+    if separator <= 0 or separator == len(query) - 1:
+        return None
+    index_text = query[separator + 1 :]
+    if not index_text.isdigit():
+        return None
+    return query[:separator].strip(), int(index_text)
+
+
+def _resolve_jump_target(
+    *,
+    query: str,
+    image_paths: Sequence[str],
+) -> tuple[str, int] | None:
+    """Resolve "<file_name>#<shape_index>" to an image path and a shape index.
+
+    File matching is case-insensitive and prefers, in order, an exact
+    basename, a basename prefix, a basename substring, then a path substring.
+    """
+    parsed = _parse_jump_query(query=query)
+    if parsed is None:
+        return None
+    file_query, shape_index = parsed
+    if not file_query:
+        return None
+    lower_query = file_query.lower()
+    for image_path in image_paths:
+        if os.path.basename(image_path).lower() == lower_query:
+            return image_path, shape_index
+    for image_path in image_paths:
+        if os.path.basename(image_path).lower().startswith(lower_query):
+            return image_path, shape_index
+    for image_path in image_paths:
+        if lower_query in os.path.basename(image_path).lower():
+            return image_path, shape_index
+    for image_path in image_paths:
+        if lower_query in image_path.lower():
+            return image_path, shape_index
+    return None
 
 
 def _shapes_from_dicts(

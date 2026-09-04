@@ -11,6 +11,7 @@ from .label_dialog import LabelDialogField
 from .label_list_widget import LabelListWidget
 from .label_list_widget import LabelListWidgetItem
 from .label_list_widget import format_shape_label
+from .quick_open_dialog import QuickOpenDialog
 from .settings_dialog import SettingsDialog
 from .tool_bar import ToolBar
 from .unique_label_qlist_widget import UniqueLabelQListWidget
@@ -27,6 +28,7 @@ __all__ = [
     "LabelListWidget",
     "LabelListWidgetItem",
     "Palette",
+    "QuickOpenDialog",
     "SettingsDialog",
     "StatusStats",
     "ToolBar",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import struct
 import zlib
 from collections.abc import Callable
@@ -505,3 +506,115 @@ def test_resolve_stored_image_path_falls_back_across_real_windows_drives() -> No
         )
         == r"D:\imgs\img.png"
     )
+
+
+@pytest.mark.parametrize(
+    "query, expected",
+    [
+        ("img.png#2", ("img.png", 2)),
+        ("img.png#0", ("img.png", 0)),
+        ("a#b#2", ("a#b", 2)),
+        ("  cat.png  #3", ("cat.png", 3)),
+        ("img.png", None),
+        ("img.png#", None),
+        ("#2", None),
+        ("img.png#x", None),
+        ("img.png#-1", None),
+        ("img.png#2.5", None),
+        ("", None),
+    ],
+    ids=[
+        "plain",
+        "index-zero",
+        "last-hash-wins",
+        "whitespace-stripped",
+        "no-index",
+        "trailing-hash",
+        "leading-hash",
+        "non-digit-index",
+        "negative-index",
+        "fractional-index",
+        "empty",
+    ],
+)
+def test_parse_jump_query(*, query: str, expected: tuple[str, int] | None) -> None:
+    assert _app._parse_jump_query(query=query) == expected
+
+
+@pytest.mark.parametrize(
+    "query, image_paths, expected",
+    [
+        (
+            "img.png#2",
+            ["c:/a/img.png", "c:/a/other.png"],
+            ("c:/a/img.png", 2),
+        ),
+        (
+            "IMG.PNG#1",
+            ["c:/a/img.png", "c:/a/other.png"],
+            ("c:/a/img.png", 1),
+        ),
+        (
+            "img#0",
+            ["c:/a/img.png", "c:/a/other.png"],
+            ("c:/a/img.png", 0),
+        ),
+        (
+            "img.png#3",
+            ["c:/a/other.png", "c:/b/img.png"],
+            ("c:/b/img.png", 3),
+        ),
+        (
+            "other#2",
+            ["c:/a/img.png", "c:/a/other.png"],
+            ("c:/a/other.png", 2),
+        ),
+        (
+            "c:/b/img#3",
+            ["c:/a/img.png", "c:/a/other.png", "c:/b/img.png"],
+            ("c:/b/img.png", 3),
+        ),
+        (
+            "nope#1",
+            ["c:/a/img.png", "c:/a/other.png"],
+            None,
+        ),
+        (
+            "img.png#x",
+            ["c:/a/img.png"],
+            None,
+        ),
+        ("img.png#2", [], None),
+    ],
+    ids=[
+        "exact-basename",
+        "case-insensitive",
+        "basename-prefix",
+        "substring-in-other-dir",
+        "basename-substring",
+        "path-substring",
+        "no-match",
+        "bad-index",
+        "empty-list",
+    ],
+)
+def test_resolve_jump_target(
+    *,
+    query: str,
+    image_paths: list[str],
+    expected: tuple[str, int] | None,
+) -> None:
+    assert (
+        _app._resolve_jump_target(query=query, image_paths=image_paths) == expected
+    )
+
+
+def test_action_icons_resolve_to_existing_files() -> None:
+    _APP_SOURCE = Path(__file__).parents[2] / "labelme" / "_app.py"
+    _ICONS_DIR = Path(__file__).parents[2] / "labelme" / "icons"
+    svg_icons = re.findall(r'icon="([^"]+\.svg)"', _APP_SOURCE.read_text("utf-8"))
+    assert svg_icons
+    for icon_name in svg_icons:
+        assert (_ICONS_DIR / icon_name).is_file(), (
+            f"missing action icon file: {icon_name}"
+        )
