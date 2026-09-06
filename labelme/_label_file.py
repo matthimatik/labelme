@@ -100,6 +100,7 @@ def _load_shape_json_obj(*, shape_json_obj: dict) -> ShapeDict:
         "group_id",
         "shape_type",
         "flags",
+        "metadata",
         "description",
         "mask",
     }
@@ -135,6 +136,14 @@ def _load_shape_json_obj(*, shape_json_obj: dict) -> ShapeDict:
 
     flags = _validate_flags(flags=shape_json_obj.get("flags"))
 
+    metadata: dict[str, Any] = {}
+    if shape_json_obj.get("metadata") is not None:
+        if not isinstance(shape_json_obj["metadata"], dict):
+            raise TypeError(
+                f"metadata must be dict: {shape_json_obj['metadata']}"
+            )
+        metadata = shape_json_obj["metadata"]
+
     description: str = ""
     if shape_json_obj.get("description") is not None:
         if not isinstance(shape_json_obj["description"], str):
@@ -169,6 +178,7 @@ def _load_shape_json_obj(*, shape_json_obj: dict) -> ShapeDict:
         points=points,
         shape_type=shape_type,
         flags=flags,
+        metadata=metadata,
         description=description,
         group_id=group_id,
         mask=mask,
@@ -190,6 +200,7 @@ def _dump_shape_to_json_obj(*, shape: ShapeDict) -> dict[str, Any]:
         description=shape["description"],
         shape_type=shape["shape_type"],
         flags=shape["flags"],
+        metadata=dict(shape["metadata"]),
         mask=None
         if shape["mask"] is None
         else _utils.img_arr_to_b64(shape["mask"].astype(np.uint8)),

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Collection
+from typing import Any
 from typing import Final
 from typing import Literal
 
@@ -10,8 +11,9 @@ from PySide6 import QtGui
 from PySide6 import QtWidgets
 
 from .._label_flags import compile_label_flags
+from .._label_metadata import compile_label_metadata
 
-LabelDialogField = Literal["label", "flags", "group_id", "description"]
+LabelDialogField = Literal["label", "flags", "metadata", "group_id", "description"]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -20,9 +22,13 @@ class LabelDialogEntry:
     flags: dict[str, bool]
     group_id: int | None
     description: str
+    metadata: dict[str, Any] = dataclasses.field(default_factory=dict)
 
 
 _PLACEHOLDER_TEXT: Final[str] = "Enter object label"
+
+#: Combo item representing an unset metadata value; collected as None.
+_UNSET_METADATA: Final[str] = "(unset)"
 
 
 class LabelDialog(QtWidgets.QDialog):
@@ -39,6 +45,7 @@ class LabelDialog(QtWidgets.QDialog):
         completion: str = "startswith",
         fit_to_content: dict[str, bool] | None = None,
         flags: dict[str, list[str]] | None = None,
+        metadata: dict[str, dict[str, list[str]]] | None = None,
         label_history: list[str] | None = None,
     ) -> None:
         LABEL_LIST_HEIGHT: Final[int] = 150
@@ -50,6 +57,7 @@ class LabelDialog(QtWidgets.QDialog):
 
         self._sort_labels = sort_labels
         self._flags_spec = compile_label_flags(label_flags=flags)
+        self._metadata_spec = compile_label_metadata(label_metadata=metadata)
         self._label_history = label_history[:] if label_history is not None else []
         # Fields the current popup shows read-only because the caller has no
         # single value for them (a mixed multi-selection).
@@ -64,6 +72,14 @@ class LabelDialog(QtWidgets.QDialog):
         # them, and an intermediate keystroke that matches no pattern destroys
         # them entirely.
         self._flag_states: dict[str, bool] = {}
+        # The metadata combos currently on show, keyed by metadata key, mirroring
+        # the flag checkboxes, plus the same per-popup remembered states.
+        self._metadata_combos: dict[str, QtWidgets.QComboBox] = {}
+        self._metadata_states: dict[str, Any] = {}
+        # Metadata the popup was opened with, so keys without a combo (no
+        # matching label_metadata pattern) are kept across an accept instead of
+        # being dropped like flags are.
+        self._provided_metadata: dict[str, Any] = {}
 
         if fit_to_content is None:
             fit_to_content = {"row": False, "column": True}
@@ -160,6 +176,21 @@ class LabelDialog(QtWidgets.QDialog):
         self._flags_scroll.setWidget(self._flags_container)
         main_layout.addWidget(self._flags_scroll)
 
+        self._metadata_container = QtWidgets.QWidget()
+        self._metadata_layout = QtWidgets.QFormLayout()
+        self._metadata_layout.setContentsMargins(0, 0, 0, 0)
+        self._metadata_layout.setSpacing(0)
+        self._metadata_container.setLayout(self._metadata_layout)
+
+        self._metadata_scroll = QtWidgets.QScrollArea()
+        self._metadata_scroll.setWidgetResizable(True)
+        self._metadata_scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self._metadata_scroll.setHorizontalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self._metadata_scroll.setWidget(self._metadata_container)
+        main_layout.addWidget(self._metadata_scroll)
+
         main_layout.addWidget(self.edit_description)
 
         # Connect signals
@@ -205,6 +236,8 @@ class LabelDialog(QtWidgets.QDialog):
         self._refresh_ok_button()
         if "flags" not in self._locked:
             self._update_flags(text)
+        if "metadata" not in self._locked:
+            self._update_metadata(text)
 
     def _refresh_ok_button(self) -> None:
         # Return only ever reaches an enabled default button, so disabling OK is
@@ -275,6 +308,78 @@ class LabelDialog(QtWidgets.QDialog):
                 flags[key] = self._flag_states.get(key, False)
         self._set_flag_checkboxes(flags=flags)
 
+    def _clear_metadata_combos(self) -> None:
+        self._metadata_combos.clear()
+        while self._metadata_layout.count():
+            item = self._metadata_layout.takeAt(0)
+            if item is None:
+                continue
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
+
+    def _metadata_keys_for_label(self, text: str, /) -> dict[str, list[str]]:
+        # A metadata key named by two matching patterns gets one combo with the
+        # union of the option lists, preserving the first-seen option order.
+        merged: dict[str, list[str]] = {}
+        for pattern, metadata in self._metadata_spec.items():
+            if not pattern.match(text):
+                continue
+            for key, options in metadata.items():
+                merged.setdefault(key, [])
+                for option in options:
+                    if option not in merged[key]:
+                        merged[key].append(option)
+        return merged
+
+    def _set_metadata_combos(
+        self, *, text: str, metadata: dict[str, Any] | None
+    ) -> None:
+        METADATA_SCROLL_MAX_HEIGHT: Final[int] = 150
+
+        self._clear_metadata_combos()
+        for key, options in self._metadata_keys_for_label(text).items():
+            combo = QtWidgets.QComboBox()
+            combo.setAccessibleName(key)
+            combo.addItem(_UNSET_METADATA, None)
+            value = None
+            if metadata is not None and key in metadata and metadata[key] in options:
+                value = metadata[key]
+            for option in options:
+                combo.addItem(option, option)
+            if value is not None:
+                combo.setCurrentIndex(combo.findData(value))
+            self._metadata_combos[key] = combo
+            self._metadata_layout.addRow(key, combo)
+            # A widget added to a visible layout stays hidden until the event
+            # loop activates the layout (same quirk as the flag checkboxes), and
+            # the container hint below would then briefly be 0 and pin the
+            # scroll area shut for the rest of the popup.
+            combo.show()
+
+        content_height = self._metadata_container.sizeHint().height()
+        self._metadata_scroll.setFixedHeight(
+            min(content_height, METADATA_SCROLL_MAX_HEIGHT)
+        )
+
+    def _read_metadata_combos(self) -> dict[str, Any]:
+        return {
+            key: combo.currentData() for key, combo in self._metadata_combos.items()
+        }
+
+    def _collect_metadata(self) -> dict[str, Any]:
+        # Keys the popup was opened with but that have no combo (no matching
+        # label_metadata pattern) survive the accept; the combos write their
+        # current picks on top.
+        metadata = dict(self._provided_metadata)
+        metadata.update(self._read_metadata_combos())
+        return metadata
+
+    def _update_metadata(self, text: str, /) -> None:
+        self._metadata_states.update(self._read_metadata_combos())
+        self._set_metadata_combos(text=text, metadata=self._metadata_states)
+
     def add_label_history(self, *, label: str) -> None:
         if label not in self._label_history:
             self._label_history.append(label)
@@ -316,6 +421,7 @@ class LabelDialog(QtWidgets.QDialog):
         *,
         text: str | None = None,
         flags: dict[str, bool] | None = None,
+        metadata: dict[str, Any] | None = None,
         group_id: int | None = None,
         description: str | None = None,
         locked: Collection[LabelDialogField] = (),
@@ -329,6 +435,8 @@ class LabelDialog(QtWidgets.QDialog):
         # previous popup's checkboxes; the flags block below rebuilds them.
         self._flag_states.clear()
         self._clear_flag_checkboxes()
+        self._metadata_states.clear()
+        self._clear_metadata_combos()
 
         # A locked field shows nothing: the caller's value is not shared by the
         # whole selection, and the field is skipped when the entry is applied.
@@ -345,6 +453,9 @@ class LabelDialog(QtWidgets.QDialog):
             description = None
         if "flags" in self._locked:
             flags = {}
+        if "metadata" in self._locked:
+            metadata = None
+        self._provided_metadata = {} if metadata is None else dict(metadata)
 
         self.edit.setText(text)
         # Read the text back: a stored label with leading whitespace is shown
@@ -357,6 +468,10 @@ class LabelDialog(QtWidgets.QDialog):
             self._update_flags(text)
         else:
             self._set_flag_checkboxes(flags=flags)
+        if metadata is None:
+            self._update_metadata(text)
+        else:
+            self._set_metadata_combos(text=text, metadata=metadata)
 
         self.label_list.setCurrentRow(self._find_label_row(text))
 
@@ -385,6 +500,7 @@ class LabelDialog(QtWidgets.QDialog):
             flags=self._collect_flags(),
             group_id=int(group_id_text) if group_id_text else None,
             description=self.edit_description.toPlainText(),
+            metadata=self._collect_metadata(),
         )
         # A locked label is accepted as blank, and the next new-shape popup
         # starts blank too, exactly as a cancelled locked edit leaves it.
@@ -397,6 +513,7 @@ class LabelDialog(QtWidgets.QDialog):
         return {
             "label": (self.edit, self.label_list),
             "flags": (self._flags_container,),
+            "metadata": (self._metadata_scroll, self._metadata_container),
             "group_id": (self.edit_group_id,),
             "description": (self.edit_description,),
         }

@@ -11,6 +11,10 @@ language:
 color_theme: system
 flags:
 label_flags:
+# per-shape dropdown metadata, keyed by label pattern, e.g.
+#   ^id_text$:
+#     type: [id_iso6346, id_uic_wagon, unknown]
+label_metadata:
 labels:
 file_search:
 sort_labels: true

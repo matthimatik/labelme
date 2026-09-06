@@ -242,6 +242,7 @@ def _make_shape_dict(*, label: str, flags: dict[str, bool]) -> ShapeDict:
         points=[[0.0, 0.0], [10.0, 20.0]],
         shape_type="rectangle",
         flags=flags,
+        metadata={},
         description="",
         group_id=None,
         mask=None,
@@ -362,6 +363,7 @@ def test_shapes_from_dicts_carries_over_the_shape_fields() -> None:
         points=[[1.0, 2.0], [3.0, 4.0]],
         shape_type="mask",
         flags={},
+        metadata={"text_orientation": "horizontal"},
         description="a parked car",
         group_id=7,
         mask=mask,
@@ -374,6 +376,7 @@ def test_shapes_from_dicts_carries_over_the_shape_fields() -> None:
     assert shape.shape_type == "mask"
     assert shape.description == "a parked car"
     assert shape.group_id == 7
+    assert shape.metadata == {"text_orientation": "horizontal"}
     assert shape.other_data == {"score": 0.9}
     np.testing.assert_array_equal(shape.mask, mask)
     assert shape.points.dtype == np.float64
@@ -386,6 +389,7 @@ def test_shape_to_dict_maps_all_fields() -> None:
         group_id=3,
         shape_type="rectangle",
         flags={"occluded": True},
+        metadata={"verified": "yes"},
         description="a cat",
         points=np.array([[0.0, 1.0], [2.0, 3.0]], dtype=np.float64),
         other_data={"source": "human"},
@@ -398,12 +402,27 @@ def test_shape_to_dict_maps_all_fields() -> None:
         "points": [[0.0, 1.0], [2.0, 3.0]],
         "shape_type": "rectangle",
         "flags": {"occluded": True},
+        "metadata": {"verified": "yes"},
         "description": "a cat",
         "group_id": 3,
         "mask": None,
         "other_data": {"source": "human"},
     }
     assert result["other_data"] is shape.other_data
+
+
+def test_shape_to_dict_defaults_metadata_to_empty() -> None:
+    shape = Shape(
+        label="cat",
+        shape_type="rectangle",
+        flags={},
+        description="",
+        points=np.array([[0.0, 0.0], [1.0, 1.0]], dtype=np.float64),
+    )
+
+    result = _app._shape_to_dict(shape)
+
+    assert result["metadata"] == {}
 
 
 @pytest.mark.parametrize(

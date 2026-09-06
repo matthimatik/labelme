@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import math
 import uuid
+from typing import Any
 from typing import TypedDict
 
 import numpy as np
@@ -24,6 +25,7 @@ class ShapeDict(TypedDict):
     points: list[list[float]]
     shape_type: str
     flags: dict[str, bool]
+    metadata: dict[str, Any]
     description: str
     group_id: int | None
     mask: NDArray[np.bool_] | None

@@ -42,6 +42,7 @@ class Shape:
     group_id: int | None = None
     shape_type: ShapeType = "polygon"
     flags: dict[str, bool] | None = None
+    metadata: dict[str, Any] = dataclasses.field(default_factory=dict)
     description: str | None = None
     mask: npt.NDArray[np.bool_] | None = None
     points: npt.NDArray[np.float64] = dataclasses.field(

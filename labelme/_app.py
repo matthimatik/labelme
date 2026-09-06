@@ -1618,6 +1618,7 @@ class MainWindow(QtWidgets.QMainWindow):
         entry = self._label_dialog.popup(
             text=first_shape.label,
             flags=first_shape.flags,
+            metadata=first_shape.metadata,
             group_id=first_shape.group_id,
             description=first_shape.description,
             locked=locked,
@@ -1904,7 +1905,7 @@ class MainWindow(QtWidgets.QMainWindow):
             entry = self._label_dialog.popup(text=text)
         else:
             entry = LabelDialogEntry(
-                label=text, flags={}, group_id=None, description=""
+                label=text, flags={}, group_id=None, description="", metadata={}
             )
 
         if entry is not None and not self.validate_label(label=entry.label):
@@ -1928,6 +1929,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if entry.group_id is not None or shape.group_id is None:
                 shape.group_id = entry.group_id
             shape.description = entry.description
+            shape.metadata = entry.metadata
             self.add_label(shape=shape)
         self._actions.edit_mode.setEnabled(True)
         self._actions.undo_last_point.setEnabled(False)
@@ -2630,6 +2632,7 @@ class MainWindow(QtWidgets.QMainWindow):
             completion=self._config["label_completion"],
             fit_to_content=self._config["fit_to_content"],
             flags=self._config["label_flags"],
+            metadata=self._config["label_metadata"],
             label_history=label_history,
         )
 
@@ -3202,6 +3205,7 @@ def _shapes_from_dicts(
             logger.warning("shape.label is not str: {}", shape.label)
         shape.flags = default_flags
         shape.flags.update(shape_dict["flags"])
+        shape.metadata = dict(shape_dict["metadata"])
         shape.other_data = shape_dict["other_data"]
 
         shapes.append(shape)
@@ -3282,6 +3286,7 @@ def _shape_to_dict(shape: Shape, /) -> ShapeDict:
         points=shape.points.tolist(),
         shape_type=shape.shape_type,
         flags=shape.flags or {},
+        metadata=shape.metadata or {},
         description=shape.description or "",
         group_id=shape.group_id,
         mask=shape.mask,

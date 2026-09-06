@@ -434,6 +434,7 @@ def test_load_shape_json_obj_parses_all_fields() -> None:
         "points": [[1.0, 2.0], [3.0, 4.0]],
         "shape_type": "rectangle",
         "flags": {"occluded": True},
+        "metadata": {},
         "description": "a note",
         "group_id": 7,
         "mask": None,
@@ -455,6 +456,7 @@ def test_load_shape_json_obj_defaults_absent_optional_fields() -> None:
         "points": [[0.0, 0.0]],
         "shape_type": "point",
         "flags": {},
+        "metadata": {},
         "description": "",
         "group_id": None,
         "mask": None,
@@ -513,6 +515,7 @@ def test_dump_shape_to_json_obj_without_mask() -> None:
         points=[[1.0, 2.0], [3.0, 4.0]],
         shape_type="rectangle",
         flags={"occluded": True},
+        metadata={"text_orientation": "horizontal"},
         description="a note",
         group_id=7,
         mask=None,
@@ -526,6 +529,7 @@ def test_dump_shape_to_json_obj_without_mask() -> None:
         "points": [[1.0, 2.0], [3.0, 4.0]],
         "shape_type": "rectangle",
         "flags": {"occluded": True},
+        "metadata": {"text_orientation": "horizontal"},
         "description": "a note",
         "group_id": 7,
         "mask": None,
@@ -539,6 +543,7 @@ def test_shape_codec_round_trips_mask(*, sample_mask: NDArray[np.bool_]) -> None
         points=[[0.0, 0.0], [4.0, 3.0]],
         shape_type="mask",
         flags={},
+        metadata={},
         description="",
         group_id=None,
         mask=sample_mask,
@@ -549,6 +554,48 @@ def test_shape_codec_round_trips_mask(*, sample_mask: NDArray[np.bool_]) -> None
 
     assert reloaded["mask"] is not None
     assert np.array_equal(reloaded["mask"], sample_mask)
+
+
+def test_shape_codec_round_trips_metadata() -> None:
+    shape = ShapeDict(
+        label="id_text",
+        points=[[0.0, 0.0], [4.0, 0.0], [4.0, 2.0], [0.0, 2.0]],
+        shape_type="polygon",
+        flags={},
+        metadata={"text_orientation": "vertical", "type": None},
+        description="ABC",
+        group_id=None,
+        mask=None,
+        other_data={},
+    )
+
+    reloaded = _load_shape_json_obj(shape_json_obj=_dump_shape_to_json_obj(shape=shape))
+
+    assert reloaded["metadata"] == {"text_orientation": "vertical", "type": None}
+
+
+def test_load_shape_json_obj_defaults_missing_metadata_to_empty() -> None:
+    loaded = _load_shape_json_obj(
+        shape_json_obj={
+            "label": "cat",
+            "points": [[0.0, 0.0], [1.0, 1.0]],
+            "shape_type": "rectangle",
+        }
+    )
+
+    assert loaded["metadata"] == {}
+
+
+def test_load_shape_json_obj_rejects_non_dict_metadata() -> None:
+    with pytest.raises(TypeError, match="metadata must be dict"):
+        _load_shape_json_obj(
+            shape_json_obj={
+                "label": "cat",
+                "points": [[0.0, 0.0], [1.0, 1.0]],
+                "shape_type": "rectangle",
+                "metadata": "horizontal",
+            }
+        )
 
 
 def test_write_label_file_round_trips(*, data_path: Path, tmp_path: Path) -> None:
@@ -590,6 +637,7 @@ def test_write_label_file_round_trips_mask_shape(
         points=[[2.0, 1.0], [3.0, 2.0]],
         shape_type="mask",
         flags={"verified": True},
+        metadata={},
         description="d",
         group_id=7,
         mask=mask,
