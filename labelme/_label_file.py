@@ -200,10 +200,10 @@ def _dump_shape_to_json_obj(*, shape: ShapeDict) -> dict[str, Any]:
         description=shape["description"],
         shape_type=shape["shape_type"],
         flags=shape["flags"],
-        metadata=dict(shape["metadata"]),
         mask=None
         if shape["mask"] is None
         else _utils.img_arr_to_b64(shape["mask"].astype(np.uint8)),
+        metadata=dict(shape["metadata"]),
     )
     return json_obj
 
