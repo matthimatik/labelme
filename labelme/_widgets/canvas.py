@@ -170,6 +170,7 @@ class Canvas(QtWidgets.QWidget):
     degenerate_shape_rejected = QtCore.Signal()
     selection_changed = QtCore.Signal(list)
     shape_moved = QtCore.Signal()
+    shape_label_edit_requested = QtCore.Signal(Shape)
     drawing_polygon = QtCore.Signal(bool)
     vertex_selected = QtCore.Signal(bool)
     edge_selected = QtCore.Signal(bool)
@@ -1375,7 +1376,17 @@ class Canvas(QtWidgets.QWidget):
             )
         return len(self._current.points) >= MIN_POLYGON_POINT_COUNT
 
-    def mouseDoubleClickEvent(self, _a0: QtGui.QMouseEvent, /) -> None:
+    def mouseDoubleClickEvent(self, a0: QtGui.QMouseEvent, /) -> None:
+        if self.mode == _CanvasMode.EDIT:
+            pos = self.transform_widget_point_to_image(a0.position())
+            shape = self._find_shape_at_point(pos)
+            if shape is not None:
+                # The second press already ran _select_shape_point on the first
+                # click; marking the shape as not-selected-hover here keeps the
+                # release that follows the label dialog from deselecting it.
+                self._hovered_shape_is_selected = False
+                self.shape_label_edit_requested.emit(shape)
+            return
         if self._double_click != "close":
             return
         if not self._can_close_shape():

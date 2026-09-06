@@ -1166,6 +1166,9 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         canvas.shape_moved.connect(self.mark_dirty)
         canvas.selection_changed.connect(self._on_shape_selection_changed)
+        canvas.shape_label_edit_requested.connect(
+            self._on_canvas_shape_label_edit_requested
+        )
         canvas.drawing_polygon.connect(self._on_drawing_polygon_changed)
 
         self.setCentralWidget(scroll_area)
@@ -1704,6 +1707,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self._actions.duplicate.setEnabled(n_selected)
         self._actions.copy.setEnabled(n_selected)
         self._actions.edit.setEnabled(n_selected)
+
+    def _on_canvas_shape_label_edit_requested(self, shape: Shape, /) -> None:
+        self._canvas_widgets.canvas.select_shapes(shapes=[shape])
+        self._edit_label()
 
     def add_label(self, *, shape: Shape) -> None:
         assert shape.label is not None

@@ -2145,6 +2145,17 @@ def _make_polygon() -> Shape:
     )
 
 
+def _make_double_click_event(*, pos: QPointF) -> QtGui.QMouseEvent:
+    return QtGui.QMouseEvent(
+        QtCore.QEvent.Type.MouseButtonDblClick,
+        pos,
+        pos,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+
+
 @pytest.mark.gui
 def test_add_point_to_edge_repaints(
     *, canvas: Canvas, monkeypatch: pytest.MonkeyPatch
@@ -2233,3 +2244,57 @@ def test_end_move_in_place_copies_points(*, canvas: Canvas) -> None:
 
     assert np.array_equal(shape.points, clone.points)
     assert not np.shares_memory(shape.points, clone.points)
+
+
+@pytest.mark.gui
+def test_double_click_on_shape_in_edit_mode_requests_label_edit(
+    *, canvas: Canvas
+) -> None:
+    shape = _make_polygon()
+    canvas.load_shapes(shapes=[shape])
+    canvas.set_editing(value=True)
+    requested: list[Shape] = []
+    canvas.shape_label_edit_requested.connect(requested.append)
+    pos = canvas.transform_image_point_to_widget(QPointF(25, 25))
+
+    canvas.mouseDoubleClickEvent(_make_double_click_event(pos=pos))
+
+    assert requested == [shape]
+
+
+@pytest.mark.gui
+def test_double_click_in_edit_mode_off_shape_requests_nothing(
+    *, canvas: Canvas
+) -> None:
+    shape = _make_polygon()
+    canvas.load_shapes(shapes=[shape])
+    canvas.set_editing(value=True)
+    requested: list[Shape] = []
+    canvas.shape_label_edit_requested.connect(requested.append)
+    pos = canvas.transform_image_point_to_widget(QPointF(90, 10))
+
+    canvas.mouseDoubleClickEvent(_make_double_click_event(pos=pos))
+
+    assert requested == []
+
+
+@pytest.mark.gui
+def test_double_click_in_create_mode_closes_shape_without_label_edit(
+    *, canvas: Canvas
+) -> None:
+    canvas.set_editing(value=False)
+    canvas.create_mode = "polygon"
+    canvas._current = _DraftShape(
+        shape_type="polygon",
+        points=(QPointF(10, 10), QPointF(20, 20), QPointF(30, 10)),
+        point_labels=(1, 1, 1),
+    )
+    requested: list[Shape] = []
+    canvas.shape_label_edit_requested.connect(requested.append)
+    pos = canvas.transform_image_point_to_widget(QPointF(15, 15))
+
+    canvas.mouseDoubleClickEvent(_make_double_click_event(pos=pos))
+
+    assert requested == []
+    assert len(canvas.shapes) == 1
+    assert canvas.shapes[0].shape_type == "polygon"
